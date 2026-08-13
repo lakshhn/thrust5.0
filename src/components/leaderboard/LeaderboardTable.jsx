@@ -1,180 +1,52 @@
-import { motion, AnimatePresence, useSpring, useTransform, useMotionValue } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-// Animated score digit counter (odometer-style)
 function AnimatedScore({ value, className }) {
-  const [prevValue, setPrevValue] = useState(value)
   const [displayValue, setDisplayValue] = useState(value)
-  const [isAnimating, setIsAnimating] = useState(false)
 
   useEffect(() => {
-    if (value !== prevValue) {
-      setIsAnimating(true)
-      const start = prevValue
-      const end = value
-      const duration = 600
-      const startTime = performance.now()
+    let start = displayValue
+    let end = value
+    if (start === end) return
 
-      const animate = (currentTime) => {
-        const elapsed = currentTime - startTime
-        const progress = Math.min(elapsed / duration, 1)
-        // Ease out cubic
-        const eased = 1 - Math.pow(1 - progress, 3)
-        const current = Math.round(start + (end - start) * eased)
-        setDisplayValue(current)
+    let duration = 500
+    let startTime = performance.now()
 
-        if (progress < 1) {
-          requestAnimationFrame(animate)
-        } else {
-          setDisplayValue(end)
-          setIsAnimating(false)
-          setPrevValue(end)
-        }
+    const animate = (now) => {
+      let elapsed = now - startTime
+      let progress = Math.min(elapsed / duration, 1)
+      let current = Math.round(start + (end - start) * progress)
+      setDisplayValue(current)
+
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      } else {
+        setDisplayValue(end)
       }
-
-      requestAnimationFrame(animate)
     }
-  }, [value, prevValue])
+
+    requestAnimationFrame(animate)
+  }, [value])
 
   return (
-    <span
-      className={className}
-      style={{ fontVariantNumeric: 'tabular-nums', fontFeatureSettings: '"tnum"' }}
-      data-score
-    >
+    <span className={className} data-score style={{ fontVariantNumeric: 'tabular-nums' }}>
       {displayValue}
     </span>
   )
 }
 
-// Score delta badge — shows "+N" after a rank-up
-function ScoreDeltaBadge({ delta }) {
-  return (
-    <motion.span
-      className="score-delta-badge"
-      initial={{ opacity: 1, y: 0 }}
-      animate={{ opacity: 0, y: -10 }}
-      transition={{ delay: 0.5, duration: 1 }}
-      aria-label={`Score increased by ${delta}`}
-    >
-      +{delta}
-    </motion.span>
-  )
-}
-
-// Individual leaderboard row
-function LeaderboardRow({ entry, prevRank, prevTotal }) {
-  const rankChanged = prevRank !== undefined && prevRank !== entry.rank
-  const movedUp = prevRank !== undefined && prevRank > entry.rank
-  const scoreDelta = prevTotal !== undefined ? entry.total - prevTotal : 0
-
-  return (
-    <motion.tr
-      layoutId={`row-${entry.id}`}
-      layout="position"
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className={`leaderboard-row ${movedUp ? 'leaderboard-row-rankup' : ''}`}
-      role="row"
-      aria-label={`Rank ${entry.rank}: ${entry.name}, total ${entry.total}`}
-    >
-      {/* Rank */}
-      <td className="w-16 pl-4 pr-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="rank-number text-lg"
-            data-rank
-            style={{
-              color: entry.rank <= 3 ? getRankColor(entry.rank) : 'var(--text-muted)',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {entry.rank}
-          </span>
-          {/* Rank change indicator */}
-          {rankChanged && (
-            <span
-              className={`text-[10px] font-bold ${movedUp ? '' : ''}`}
-              style={{ color: movedUp ? 'var(--success)' : 'var(--text-faint)' }}
-              aria-label={movedUp ? `Moved up from rank ${prevRank}` : `Moved down from rank ${prevRank}`}
-            >
-              {movedUp ? '▲' : '▼'}
-            </span>
-          )}
-        </div>
-      </td>
-
-      {/* Team */}
-      <td className="py-3 pr-4">
-        <div>
-          <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-            {entry.name}
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-            {entry.code}
-          </p>
-        </div>
-      </td>
-
-      {/* Round scores */}
-      {['round_1', 'round_2', 'round_3'].map((round) => (
-        <td key={round} className="col-score text-right pr-4">
-          <span
-            className="text-sm score-cell"
-            style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
-          >
-            {entry[round] ?? '–'}
-          </span>
-        </td>
-      ))}
-
-      {/* Design marks */}
-      <td className="col-score text-right pr-4">
-        <span
-          className="text-sm score-cell"
-          style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
-        >
-          {entry.design ?? '–'}
-        </span>
-      </td>
-
-      {/* Total — prominent, animated */}
-      <td className="col-score text-right pr-4 relative">
-        <div className="relative inline-flex items-center">
-          <AnimatedScore
-            value={entry.total}
-            className="font-semibold text-sm"
-          />
-          {/* Delta badge — appears after score update */}
-          <AnimatePresence>
-            {scoreDelta > 0 && (
-              <ScoreDeltaBadge key={`delta-${entry.id}-${entry.total}`} delta={scoreDelta} />
-            )}
-          </AnimatePresence>
-        </div>
-      </td>
-    </motion.tr>
-  )
-}
-
-function getRankColor(rank) {
-  if (rank === 1) return '#E8B84B' // gold
-  if (rank === 2) return '#B8C0CC' // silver
-  if (rank === 3) return '#CD7F3B' // bronze
-  return 'var(--text-muted)'
-}
-
-/**
- * LeaderboardTable — virtualized, layout-animated table
- * Shows all teams below the podium (rank 4+)
- * Uses @tanstack/react-virtual for performance with large team counts
- */
-export default function LeaderboardTable({ entries, searchQuery = '' }) {
+export default function LeaderboardTable({ entries, searchQuery = '', viewMode = 'overall' }) {
   const parentRef = useRef(null)
 
-  // Filter out top 3 (shown in podium) and apply search
-  const filtered = entries
-    .filter(e => e.rank > 3)
+  // Rank sorting based on viewMode
+  const sorted = [...entries].sort((a, b) => {
+    return viewMode === 'design' ? (b.design - a.design) : (b.total - a.total)
+  }).map((entry, idx) => ({ ...entry, currentRank: idx + 1 }))
+
+  // Exclude top 3 (shown in podium) & filter search
+  const filtered = sorted
+    .filter(e => e.currentRank > 3)
     .filter(e =>
       !searchQuery ||
       e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -184,121 +56,102 @@ export default function LeaderboardTable({ entries, searchQuery = '' }) {
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 56, // estimated row height in px
+    estimateSize: () => 58,
     overscan: 5,
   })
 
   return (
-    <div className="relative">
-      {/* Table header — sticky */}
-      <table className="leaderboard-table w-full" aria-label="Full leaderboard rankings">
-        <thead>
-          <tr role="row">
-            <th className="w-16 pl-4 pr-2 text-left" scope="col">Rank</th>
-            <th className="text-left pr-4" scope="col">Team</th>
-            <th className="col-score text-right pr-4" scope="col">R1</th>
-            <th className="col-score text-right pr-4" scope="col">R2</th>
-            <th className="col-score text-right pr-4" scope="col">R3</th>
-            <th className="col-score text-right pr-4" scope="col">Design</th>
-            <th className="col-score text-right pr-4" scope="col">Total</th>
-          </tr>
-        </thead>
-      </table>
+    <div className="w-full relative overflow-x-auto">
+      {/* Table Header */}
+      <div className="min-w-[340px] sm:min-w-full">
+        <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-[#0D131F]/90 border-b border-slate-800 text-[11px] font-semibold tracking-wider text-slate-400 uppercase sticky top-0 z-10 backdrop-blur-md">
+          <div className="col-span-2 sm:col-span-1 text-center">Rank</div>
+          <div className="col-span-6 sm:col-span-5">Team</div>
+          {viewMode === 'overall' ? (
+            <>
+              <div className="col-span-1 text-right hidden sm:block">R1</div>
+              <div className="col-span-1 text-right hidden sm:block">R2</div>
+              <div className="col-span-1 text-right hidden sm:block">R3</div>
+              <div className="col-span-1 text-right hidden sm:block text-cyan-400">DES</div>
+              <div className="col-span-4 sm:col-span-2 text-right font-bold text-slate-200">Total</div>
+            </>
+          ) : (
+            <div className="col-span-4 sm:col-span-6 text-right font-bold text-cyan-400">Design Mark (Max 25)</div>
+          )}
+        </div>
 
-      {/* Virtualized body */}
-      <div
-        ref={parentRef}
-        className="overflow-y-auto"
-        style={{ maxHeight: 'calc(100vh - 360px)', minHeight: '200px' }}
-        role="region"
-        aria-label="Team rankings list"
-      >
+        {/* Scrollable Container */}
         <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
+          ref={parentRef}
+          className="overflow-y-auto max-h-[550px] min-h-[250px] divide-y divide-slate-800/50"
         >
-          <table className="leaderboard-table w-full absolute top-0 left-0">
-            <tbody>
-              {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                const entry = filtered[virtualItem.index]
-                return (
-                  <tr
-                    key={entry.id}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualItem.size}px`,
-                      transform: `translateY(${virtualItem.start}px)`,
-                    }}
-                    className="leaderboard-row"
-                    role="row"
-                    aria-label={`Rank ${entry.rank}: ${entry.name}, total ${entry.total}`}
-                  >
-                    {/* Rank */}
-                    <td className="w-16 pl-4 pr-2">
-                      <span
-                        className="rank-number text-lg"
-                        data-rank
-                        style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {entry.rank}
-                      </span>
-                    </td>
-                    {/* Team */}
-                    <td className="py-3 pr-4">
-                      <div>
-                        <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-                          {entry.name}
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-faint)' }}>
-                          {entry.code}
-                        </p>
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+              const entry = filtered[virtualItem.index]
+              return (
+                <div
+                  key={`${viewMode}-${entry.id}`}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualItem.size}px`,
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                  className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-cyan-500/5 transition-colors text-sm"
+                >
+                  {/* Rank */}
+                  <div className="col-span-2 sm:col-span-1 text-center font-bold text-slate-400 font-mono">
+                    #{entry.currentRank}
+                  </div>
+
+                  {/* Team Name & Code */}
+                  <div className="col-span-6 sm:col-span-5 pr-2">
+                    <p className="font-semibold text-slate-100 truncate text-xs sm:text-sm">{entry.name}</p>
+                    <p className="text-[10px] text-slate-500 font-mono truncate">{entry.code}</p>
+                  </div>
+
+                  {/* Breakdown / Scores */}
+                  {viewMode === 'overall' ? (
+                    <>
+                      <div className="col-span-1 text-right text-slate-400 text-xs hidden sm:block">{entry.round_1 ?? 0}</div>
+                      <div className="col-span-1 text-right text-slate-400 text-xs hidden sm:block">{entry.round_2 ?? 0}</div>
+                      <div className="col-span-1 text-right text-slate-400 text-xs hidden sm:block">{entry.round_3 ?? 0}</div>
+                      <div className="col-span-1 text-right text-cyan-400 text-xs hidden sm:block">{entry.design ?? 0}</div>
+                      <div className="col-span-4 sm:col-span-2 text-right">
+                        <AnimatedScore
+                          value={entry.total}
+                          className="font-bold text-slate-100 text-sm sm:text-base text-cyan-400"
+                        />
                       </div>
-                    </td>
-                    {/* Scores */}
-                    {['round_1', 'round_2', 'round_3'].map((round) => (
-                      <td key={round} className="col-score text-right pr-4">
-                        <span
-                          className="text-sm score-cell"
-                          style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {entry[round] ?? '–'}
-                        </span>
-                      </td>
-                    ))}
-                    <td className="col-score text-right pr-4">
-                      <span className="text-sm score-cell" style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                        {entry.design ?? '–'}
-                      </span>
-                    </td>
-                    <td className="col-score text-right pr-4">
-                      <span
-                        className="font-semibold text-sm score-cell"
-                        style={{ fontVariantNumeric: 'tabular-nums' }}
-                        data-score
-                      >
-                        {entry.total}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    </>
+                  ) : (
+                    <div className="col-span-4 sm:col-span-6 text-right">
+                      <AnimatedScore
+                        value={entry.design}
+                        className="font-bold text-cyan-400 text-sm sm:text-base"
+                      />
+                      <span className="text-[10px] text-slate-500 ml-1">/ 25</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* Empty Search Filter State */}
       {filtered.length === 0 && (
-        <div className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
-          {searchQuery
-            ? `No teams matching "${searchQuery}"`
-            : 'No teams to display.'}
+        <div className="py-12 text-center text-slate-500 text-sm">
+          {searchQuery ? `No teams found for "${searchQuery}"` : 'No teams listed.'}
         </div>
       )}
     </div>

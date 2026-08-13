@@ -1,99 +1,53 @@
-/**
- * DesignMarksPanel — compact secondary leaderboard ranking teams by design score
- * Lives in the right sidebar on desktop, second tab on mobile
- */
+import { Palette, Award, ShieldCheck } from 'lucide-react'
+
 export default function DesignMarksPanel({ entries }) {
-  // Sort by design score, descending
   const ranked = [...entries]
     .sort((a, b) => b.design - a.design)
     .map((entry, idx) => ({ ...entry, designRank: idx + 1 }))
 
   return (
-    <aside
-      className="design-marks-panel p-4"
-      aria-label="Design Marks leaderboard"
-    >
-      {/* Panel header */}
-      <div className="mb-4">
-        <h2
-          className="text-xs font-semibold uppercase tracking-widest mb-1"
-          style={{ color: 'var(--text-faint)' }}
-        >
-          Design Marks
-        </h2>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          Teams ranked by design score
-        </p>
+    <aside className="p-4 sm:p-5 card-cyber m-4" aria-label="Design Marks Breakdown">
+      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
+        <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+          <Palette size={18} />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wide">
+            Design & Aerodynamics
+          </h2>
+          <p className="text-[11px] text-slate-400">
+            Judged on CAD stability & structural integrity (Max 25 pts)
+          </p>
+        </div>
       </div>
 
-      {/* Design marks list */}
-      <div className="space-y-1">
+      <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
         {ranked.map((entry) => (
           <div
             key={entry.id}
-            className="flex items-center gap-3 py-2 px-2 rounded-md transition-colors hover:bg-opacity-50"
-            style={{ backgroundColor: 'transparent' }}
-            role="row"
-            aria-label={`Design rank ${entry.designRank}: ${entry.name}, score ${entry.design}`}
+            className="flex items-center justify-between p-2.5 rounded-lg bg-[#070A0F]/60 border border-slate-800/80 hover:border-cyan-500/30 transition-all text-xs"
           >
-            {/* Design rank */}
-            <span
-              className="rank-number text-sm w-6 text-right flex-shrink-0"
-              style={{
-                color: entry.designRank <= 3
-                  ? getDesignRankColor(entry.designRank)
-                  : 'var(--text-faint)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              data-rank
-            >
-              {entry.designRank}
-            </span>
-
-            {/* Team name */}
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-xs font-medium truncate"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {entry.name}
-              </p>
-              <p
-                className="text-[10px] truncate"
-                style={{ color: 'var(--text-faint)' }}
-              >
-                {entry.code}
-              </p>
+            <div className="flex items-center gap-3">
+              <span className={`font-mono font-bold w-5 text-center ${
+                entry.designRank === 1 ? 'text-yellow-400' :
+                entry.designRank === 2 ? 'text-slate-300' :
+                entry.designRank === 3 ? 'text-amber-600' : 'text-slate-500'
+              }`}>
+                #{entry.designRank}
+              </span>
+              <div>
+                <p className="font-semibold text-slate-200">{entry.name}</p>
+                <p className="text-[10px] text-slate-500 font-mono">{entry.code}</p>
+              </div>
             </div>
 
-            {/* Design score */}
-            <span
-              className="text-sm font-semibold score-cell flex-shrink-0"
-              style={{
-                fontVariantNumeric: 'tabular-nums',
-                color: entry.designRank === 1 ? 'var(--gold)' : 'var(--text-primary)',
-              }}
-              data-score
-            >
-              {entry.design}
-            </span>
+            <div className="text-right">
+              <span className="font-bold text-cyan-400 text-sm">{entry.design}</span>
+              <span className="text-[10px] text-slate-500"> / 25</span>
+            </div>
           </div>
         ))}
       </div>
-
-      {/* Footer label */}
-      <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <p className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-faint)' }}>
-          Max 25 points
-        </p>
-      </div>
     </aside>
   )
-}
-
-function getDesignRankColor(rank) {
-  if (rank === 1) return '#E8B84B'
-  if (rank === 2) return '#B8C0CC'
-  if (rank === 3) return '#CD7F3B'
-  return 'var(--text-faint)'
 }

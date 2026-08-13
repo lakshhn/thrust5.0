@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { Lock } from 'lucide-react'
+import { Lock, Rocket, Palette, Trophy, RefreshCw } from 'lucide-react'
 import PodiumBlock from '../components/leaderboard/PodiumBlock.jsx'
 import LeaderboardTable from '../components/leaderboard/LeaderboardTable.jsx'
 import DesignMarksPanel from '../components/leaderboard/DesignMarksPanel.jsx'
 import LiveStatusPill from '../components/ui/LiveStatusPill.jsx'
 import SearchInput from '../components/ui/SearchInput.jsx'
-import { MOCK_LEADERBOARD } from '../data/mockData.js'
+import AerospaceBackground from '../components/ui/AerospaceBackground.jsx'
+import { MOCK_LEADERBOARD, computeLeaderboard } from '../data/mockData.js'
 import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
-import { computeLeaderboard } from '../data/mockData.js'
 
-const HEARTBEAT_TIMEOUT_MS = 45000 // 45 seconds before "reconnecting" state
+const HEARTBEAT_TIMEOUT_MS = 45000
 
 export default function Leaderboard() {
   const [entries, setEntries] = useState(MOCK_LEADERBOARD)
@@ -20,12 +20,11 @@ export default function Leaderboard() {
   )
   const [lastUpdated, setLastUpdated] = useState(new Date())
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('leaderboard') // mobile: 'leaderboard' | 'design'
+  // View mode switcher: 'overall' | 'design'
+  const [viewMode, setViewMode] = useState('overall')
 
   const heartbeatTimer = useRef(null)
-  const subscriptionRef = useRef(null)
 
-  // Set up Supabase Realtime subscription
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return
 
@@ -34,70 +33,47 @@ export default function Leaderboard() {
       setConnectionStatus('connected')
       heartbeatTimer.current = setTimeout(() => {
         setConnectionStatus('reconnecting')
-        startSheetFallback()
       }, HEARTBEAT_TIMEOUT_MS)
     }
 
     const fetchLeaderboard = async () => {
       try {
-        const { data: teams, error: teamsError } = await supabase
-          .from('teams')
-          .select('*')
-          .order('created_at')
+        const { data: teams, error: tErr } = await supabase.from('teams').select('*').order('created_at')
+        const { data: scores, error: sErr } = await supabase.from('scores').select('team_id, category, value')
 
-        const { data: scores, error: scoresError } = await supabase
-          .from('scores')
-          .select('team_id, category, value')
+        if (tErr || sErr) throw new Error('Data fetch failed')
 
-        if (teamsError || scoresError) throw new Error('Failed to fetch data')
-
-        // Transform Supabase scores into per-team score objects
-        const scoresByTeam = {}
+        const scoreMap = {}
         scores.forEach(s => {
-          if (!scoresByTeam[s.team_id]) scoresByTeam[s.team_id] = {}
-          scoresByTeam[s.team_id][s.category] = s.value
+          if (!scoreMap[s.team_id]) scoreMap[s.team_id] = {}
+          scoreMap[s.team_id][s.category] = s.value
         })
 
-        const scoreMapped = teams.map(t => ({
+        const mappedScores = teams.map(t => ({
           team_id: t.id,
-          round_1: scoresByTeam[t.id]?.round_1 || 0,
-          round_2: scoresByTeam[t.id]?.round_2 || 0,
-          round_3: scoresByTeam[t.id]?.round_3 || 0,
-          design: scoresByTeam[t.id]?.design || 0,
+          round_1: scoreMap[t.id]?.round_1 || 0,
+          round_2: scoreMap[t.id]?.round_2 || 0,
+          round_3: scoreMap[t.id]?.round_3 || 0,
+          design: scoreMap[t.id]?.design || 0,
         }))
 
-        const leaderboard = computeLeaderboard(teams, scoreMapped)
+        const leaderboard = computeLeaderboard(teams, mappedScores)
         setEntries(leaderboard)
         setLastUpdated(new Date())
         resetHeartbeat()
       } catch (err) {
-        console.error('[Leaderboard] Failed to fetch:', err)
+        console.error('[Leaderboard] Sync Error:', err)
       }
     }
 
     fetchLeaderboard()
 
-    // Subscribe to real-time score changes
     const channel = supabase
       .channel('public-scores')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, () => {
         fetchLeaderboard()
-        resetHeartbeat()
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
-        fetchLeaderboard()
-        resetHeartbeat()
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          setConnectionStatus('connected')
-          resetHeartbeat()
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          setConnectionStatus('reconnecting')
-        }
-      })
-
-    subscriptionRef.current = channel
+      .subscribe()
 
     return () => {
       clearTimeout(heartbeatTimer.current)
@@ -105,180 +81,113 @@ export default function Leaderboard() {
     }
   }, [])
 
-  // Google Sheets fallback polling
-  const startSheetFallback = () => {
-    const sheetUrl = import.meta.env.VITE_SHEETS_CSV_URL
-    if (!sheetUrl) return
-
-    const pollSheet = async () => {
-      try {
-        const res = await fetch(sheetUrl)
-        const text = await res.text()
-        // Parse CSV fallback — format: Team,Round1,Round2,Round3,Design
-        // Simple CSV parse (no library needed for this structure)
-        const lines = text.trim().split('\n').slice(1) // skip header
-        const sheetEntries = lines.map((line, idx) => {
-          const [name, r1, r2, r3, design] = line.split(',')
-          const round_1 = parseInt(r1) || 0
-          const round_2 = parseInt(r2) || 0
-          const round_3 = parseInt(r3) || 0
-          const des = parseInt(design) || 0
-          const total = round_1 + round_2 + round_3 + des
-          return {
-            id: `sheet-${idx}`,
-            name: name?.trim() || `Team ${idx + 1}`,
-            code: `T-${String(idx + 1).padStart(2, '0')}`,
-            round_1, round_2, round_3,
-            design: des,
-            total,
-            rank: idx + 1, // will re-sort below
-          }
-        })
-        .sort((a, b) => b.total - a.total)
-        .map((e, i) => ({ ...e, rank: i + 1 }))
-
-        setEntries(sheetEntries)
-        setLastUpdated(new Date())
-        setConnectionStatus('stale') // degraded but working
-      } catch (err) {
-        console.error('[Leaderboard] Sheet fallback failed:', err)
-      }
-    }
-
-    pollSheet()
-    const interval = setInterval(pollSheet, 12000) // poll every 12s in fallback mode
-    return () => clearInterval(interval)
-  }
-
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
-      {/* ===== SITE HEADER ===== */}
-      <header
-        className="site-header"
-        role="banner"
-      >
-        <div className="flex items-center justify-between px-4 md:px-6 h-16">
-          {/* Brand / Wordmark */}
-          <div>
-            <h1
-              className="display-text text-2xl md:text-3xl tracking-widest leading-none"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              THRUST 5.0
-            </h1>
-            <p
-              className="text-[10px] uppercase tracking-[0.2em]"
-              style={{ color: 'var(--text-faint)', letterSpacing: '0.18em' }}
-            >
-              Aero Fabrication Club
-            </p>
+    <div className="min-h-screen relative bg-[#070A0F] text-slate-100 flex flex-col justify-between overflow-x-hidden selection:bg-cyan-500 selection:text-black">
+      {/* Dynamic Aerospace Background Decorations */}
+      <AerospaceBackground />
+
+      {/* Main Content Container */}
+      <div className="relative z-10 flex-1 flex flex-col max-w-6xl w-full mx-auto px-3 sm:px-6">
+        
+        {/* ===== SITE HEADER ===== */}
+        <header className="py-4 border-b border-slate-800/80 mb-4 flex items-center justify-between">
+          {/* Brand Identity with AFC Logo & Event Title */}
+          <div className="flex items-center gap-3">
+            {/* AFC Logo Badge */}
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-[#1E6FBA] to-[#29ABE2] p-0.5 shadow-afc-cyan flex-shrink-0">
+              <div className="w-full h-full bg-[#070A0F] rounded-[10px] flex items-center justify-center">
+                <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M50 15 L80 80 L50 65 L20 80 Z" fill="#29ABE2" />
+                  <circle cx="50" cy="50" r="14" fill="#1E6FBA" />
+                </svg>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="display-text text-xl sm:text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-100 via-cyan-200 to-cyan-400">
+                  THRUST 5.0
+                </h1>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                  WATER ROCKET
+                </span>
+              </div>
+              <p className="text-[11px] font-mono text-slate-400 tracking-wider">
+                AERO FABRICATION CLUB · IIITDMJ
+              </p>
+            </div>
           </div>
 
-          {/* Right: live status + admin link */}
-          <div className="flex items-center gap-4">
+          {/* Right Status & Admin Navigation */}
+          <div className="flex items-center gap-3">
             <LiveStatusPill status={connectionStatus} lastUpdated={lastUpdated} />
             <Link
               to="/admin/login"
-              className="hidden md:flex items-center gap-1.5 text-xs py-1.5 px-3 rounded-md transition-colors"
-              style={{
-                color: 'var(--text-faint)',
-                border: '1px solid var(--border-subtle)',
-              }}
-              aria-label="Admin panel login"
+              className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 transition-all"
+              title="Admin Panel Login"
             >
-              <Lock size={11} strokeWidth={2} aria-hidden="true" />
-              Admin
+              <Lock size={15} />
             </Link>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* ===== MOBILE TAB BAR ===== */}
-      <nav
-        className="tab-bar-mobile"
-        role="tablist"
-        aria-label="Leaderboard sections"
-      >
-        <button
-          role="tab"
-          aria-selected={activeTab === 'leaderboard'}
-          className={`round-tab ${activeTab === 'leaderboard' ? 'round-tab-active' : ''}`}
-          onClick={() => setActiveTab('leaderboard')}
-          id="tab-leaderboard"
-          aria-controls="panel-leaderboard"
-        >
-          Rankings
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'design'}
-          className={`round-tab ${activeTab === 'design' ? 'round-tab-active' : ''}`}
-          onClick={() => setActiveTab('design')}
-          id="tab-design"
-          aria-controls="panel-design"
-        >
-          Design Marks
-        </button>
-      </nav>
-
-      {/* ===== MAIN CONTENT GRID ===== */}
-      <main>
-        <div className="leaderboard-layout">
-          {/* === LEFT: MAIN LEADERBOARD === */}
-          <div
-            className={`main-leaderboard-area ${activeTab !== 'leaderboard' ? 'hidden lg:block' : ''}`}
-            id="panel-leaderboard"
-            role="tabpanel"
-            aria-labelledby="tab-leaderboard"
-          >
-            {/* Podium block */}
-            <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <PodiumBlock entries={entries} />
-            </div>
-
-            {/* Search + table header */}
-            <div
-              className="flex items-center justify-between px-4 md:px-6 py-3"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+        {/* ===== PROMINENT SEGMENTED TOGGLE SWITCH (MOBILE & DESKTOP) ===== */}
+        <div className="my-2 mb-6">
+          <div className="segmented-toggle">
+            <button
+              onClick={() => setViewMode('overall')}
+              className={`segmented-btn ${viewMode === 'overall' ? 'segmented-btn-active' : ''}`}
             >
-              <h2
-                className="text-xs font-semibold uppercase tracking-widest"
-                style={{ color: 'var(--text-faint)' }}
-              >
-                Full Rankings
-              </h2>
-              <SearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search teams…"
-              />
-            </div>
-
-            {/* Leaderboard table */}
-            <LeaderboardTable entries={entries} searchQuery={searchQuery} />
-          </div>
-
-          {/* === RIGHT: DESIGN MARKS PANEL === */}
-          <div
-            className={`design-marks-panel ${activeTab === 'design' ? 'tab-active' : ''}`}
-            id="panel-design"
-            role="tabpanel"
-            aria-labelledby="tab-design"
-          >
-            <DesignMarksPanel entries={entries} />
+              <Rocket size={15} />
+              <span>Overall Rankings</span>
+            </button>
+            <button
+              onClick={() => setViewMode('design')}
+              className={`segmented-btn ${viewMode === 'design' ? 'segmented-btn-active' : ''}`}
+            >
+              <Palette size={15} />
+              <span>Design Marks</span>
+            </button>
           </div>
         </div>
-      </main>
+
+        {/* ===== HERO PODIUM SECTION ===== */}
+        <div className="mb-6">
+          <div className="text-center mb-3">
+            <h2 className="text-xs font-mono font-semibold uppercase tracking-widest text-cyan-400">
+              {viewMode === 'overall' ? '— Top Flight Champions —' : '— Highest Rated Aircraft Designs —'}
+            </h2>
+          </div>
+          <PodiumBlock entries={entries} viewMode={viewMode} />
+        </div>
+
+        {/* ===== LEADERBOARD TABLE SECTION ===== */}
+        <div className="card-cyber overflow-hidden mb-8">
+          <div className="p-3 sm:p-4 border-b border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0D131F]/80">
+            <div className="flex items-center gap-2">
+              <Trophy size={16} className="text-cyan-400" />
+              <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+                {viewMode === 'overall' ? 'Complete Leaderboard' : 'Design Score Standings'}
+              </h2>
+            </div>
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search team or code..."
+            />
+          </div>
+
+          <LeaderboardTable entries={entries} searchQuery={searchQuery} viewMode={viewMode} />
+        </div>
+
+      </div>
 
       {/* ===== FOOTER ===== */}
-      <footer
-        className="px-4 md:px-6 py-4"
-        style={{ borderTop: '1px solid var(--border-subtle)' }}
-        role="contentinfo"
-      >
-        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
-          Thrust 5.0 · Aero Fabrication Club · Live scoring system
-        </p>
+      <footer className="relative z-10 border-t border-slate-800/80 py-4 bg-[#070A0F]/90 text-center text-xs text-slate-500">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p>© {new Date().getFullYear()} Aero Fabrication Club (AFC IIITDMJ). All Rights Reserved.</p>
+          <p className="text-[11px] font-mono text-cyan-500/70">Thrust 5.0 Water Rocket Competition Platform</p>
+        </div>
       </footer>
     </div>
   )

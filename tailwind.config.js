@@ -7,81 +7,69 @@ export default {
   theme: {
     extend: {
       colors: {
-        // === THRUST 5.0 BRAND PALETTE ===
-        // Extracted from placeholder palette (Design Doc §2.2)
-        // Replace with logo-extracted values once logo is delivered
-        'bg-base':      '#0B0E14',  // Page background — near-black, slight blue undertone
-        'bg-surface':   '#12161F',  // Card/panel surface
-        'bg-elevated':  '#1A1F2E',  // Elevated surface (popovers, modals)
-        'ignition':     '#FF5A1F',  // Primary accent — rank-up, live pulse, CTA
-        'ignition-dim': '#CC421A',  // Darker ignition for hover states
-        'thrust-blue':  '#2E7DFF',  // Secondary — links, active tabs
-        'thrust-blue-dim': '#1E5FCC', // Darker blue for hover
-        'gold':         '#E8B84B',  // Rank #1 — used sparingly
-        'silver':       '#B8C0CC',  // Rank #2
+        // === AFC BRAND COLOR PALETTE (From AFC IIITDMJ Logo) ===
+        'bg-base':      '#070A0F',  // Ultra dark space black with blue tint
+        'bg-surface':   '#0D131F',  // Deep aerospace navy card background
+        'bg-elevated':  '#141C2E',  // Elevated surface for panels
+        'afc-cyan':     '#29ABE2',  // Core AFC Electric Cyan
+        'afc-blue':     '#1E6FBA',  // Core AFC Royal Blue
+        'afc-glow':     '#00D2FF',  // High-intensity neon cyan
+        'ignition':     '#FF5A1F',  // Rocket launch orange accent
+        'gold':         '#FFD700',  // Rank #1
+        'silver':       '#E2E8F0',  // Rank #2
         'bronze':       '#CD7F3B',  // Rank #3
-        'text-primary': '#F4F5F7',  // Primary text
-        'text-muted':   '#8A93A6',  // Secondary/meta text
-        'text-faint':   '#4A5568',  // Very subtle/disabled text
-        'success':      '#3ECF8E',  // Sync-OK / live indicator
-        'success-dim':  '#2A8F60',  // Darker success for borders
-        'danger':       '#E5484D',  // Sync error / disconnected state
-        'danger-dim':   '#B03538',  // Darker danger for borders
-        'border-subtle':'#1E2535',  // Subtle dividers
-        'border-mid':   '#2A3147',  // Mid-weight borders
+        'text-primary': '#F8FAFC',  // Crisp white
+        'text-muted':   '#94A3B8',  // Cool gray
+        'text-faint':   '#475569',  // Subtle slate
+        'success':      '#10B981',  // Live sync status
+        'danger':       '#EF4444',  // Error
+        'border-subtle':'#1E293B',  // Subtle border
+        'border-mid':   '#334155',  // Highlight border
+        'border-glow':  'rgba(41, 171, 226, 0.4)',
       },
       fontFamily: {
-        // Display face for "Thrust 5.0" and "Aero Fabrication Club"
-        'display': ['"Bebas Neue"', '"Archivo Black"', 'system-ui', 'sans-serif'],
-        // Condensed variant for rank numbers
-        'mono-display': ['"Bebas Neue"', 'monospace'],
-        // Body/UI workhorse — Inter for labels, forms, table content
-        'body': ['"Inter"', 'system-ui', 'sans-serif'],
+        'display': ['"Space Grotesk"', '"Bebas Neue"', 'sans-serif'],
+        'mono-display': ['"Space Grotesk"', 'monospace'],
+        'body': ['"Inter"', 'sans-serif'],
       },
       fontSize: {
-        'rank-xl':  ['5rem', { lineHeight: '1', letterSpacing: '-0.02em' }],
-        'rank-lg':  ['3.5rem', { lineHeight: '1', letterSpacing: '-0.01em' }],
-        'rank-md':  ['2rem', { lineHeight: '1' }],
-        'score-xl': ['2.5rem', { lineHeight: '1', letterSpacing: '-0.02em' }],
-      },
-      spacing: {
-        '18': '4.5rem',
-        '22': '5.5rem',
-        '30': '7.5rem',
+        'rank-xl':  ['4.5rem', { lineHeight: '1', letterSpacing: '-0.02em' }],
+        'rank-lg':  ['3rem', { lineHeight: '1' }],
+        'score-xl': ['2.25rem', { lineHeight: '1' }],
       },
       animation: {
-        'pulse-live': 'pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'pulse-reconnect': 'pulse-reconnect 1s ease-in-out infinite',
-        'rank-up-flash': 'rank-up-flash 1.5s ease-out forwards',
-        'fade-out': 'fade-out 1.5s ease-out forwards',
+        'pulse-glow': 'pulse-glow 2.5s ease-in-out infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'rocket-thrust': 'rocket-thrust 3s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+        'rotor-spin': 'rotor-spin 0.4s linear infinite',
+        'glider-sweep': 'glider-sweep 14s ease-in-out infinite',
       },
       keyframes: {
-        'pulse-live': {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.5' },
+        'pulse-glow': {
+          '0%, 100%': { opacity: '0.4', filter: 'drop-shadow(0 0 12px rgba(41, 171, 226, 0.6))' },
+          '50%': { opacity: '0.9', filter: 'drop-shadow(0 0 24px rgba(0, 210, 255, 0.9))' },
         },
-        'pulse-reconnect': {
-          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
-          '50%': { opacity: '0.6', transform: 'scale(0.95)' },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+          '50%': { transform: 'translateY(-10px) rotate(1deg)' },
         },
-        'rank-up-flash': {
-          '0%': { boxShadow: '0 0 0 0 rgba(255, 90, 31, 0.4)' },
-          '70%': { boxShadow: '0 0 0 8px rgba(255, 90, 31, 0)' },
-          '100%': { boxShadow: '0 0 0 0 rgba(255, 90, 31, 0)' },
+        'rotor-spin': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
         },
-        'fade-out': {
-          '0%': { opacity: '1', transform: 'translateY(0)' },
-          '70%': { opacity: '1', transform: 'translateY(-4px)' },
-          '100%': { opacity: '0', transform: 'translateY(-8px)' },
+        'glider-sweep': {
+          '0%': { transform: 'translate(-10%, 20px) rotate(-2deg)', opacity: '0' },
+          '15%': { opacity: '0.35' },
+          '85%': { opacity: '0.35' },
+          '100%': { transform: 'translate(110vw, -40px) rotate(3deg)', opacity: '0' },
         },
       },
       boxShadow: {
-        'surface': '0 1px 3px 0 rgba(0,0,0,0.4), 0 1px 2px -1px rgba(0,0,0,0.4)',
-        'surface-lg': '0 4px 24px -4px rgba(0,0,0,0.5)',
-        'podium-gold': '0 0 0 2px rgba(232,184,75,0.4), 0 4px 24px -4px rgba(232,184,75,0.2)',
-        'podium-silver': '0 0 0 2px rgba(184,192,204,0.3), 0 4px 24px -4px rgba(184,192,204,0.1)',
-        'podium-bronze': '0 0 0 2px rgba(205,127,59,0.3), 0 4px 24px -4px rgba(205,127,59,0.1)',
-        'ignition-glow': '0 0 0 2px rgba(255,90,31,0.4)',
+        'afc-cyan': '0 0 20px rgba(41, 171, 226, 0.25)',
+        'afc-glow': '0 0 30px rgba(0, 210, 255, 0.4)',
+        'podium-gold': '0 0 25px rgba(255, 215, 0, 0.3)',
+        'podium-silver': '0 0 20px rgba(226, 232, 240, 0.2)',
+        'podium-bronze': '0 0 20px rgba(205, 127, 59, 0.25)',
       },
     },
   },
