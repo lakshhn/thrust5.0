@@ -72,17 +72,18 @@ export default function LeaderboardTable({ entries = [], searchQuery = '', viewM
       <div className="min-w-[340px] sm:min-w-full">
         <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-[#0B101D] border-b border-slate-800 text-[11px] font-semibold tracking-wider text-slate-400 uppercase sticky top-0 z-10 font-mono">
           <div className="col-span-2 sm:col-span-1 text-center">Rank</div>
-          <div className="col-span-6 sm:col-span-5">Team</div>
+          <div className="col-span-6 sm:col-span-4">Team</div>
           {viewMode === 'overall' ? (
             <>
               <div className="col-span-1 text-right hidden sm:block">R1</div>
               <div className="col-span-1 text-right hidden sm:block">R2</div>
               <div className="col-span-1 text-right hidden sm:block">R3</div>
               <div className="col-span-1 text-right hidden sm:block text-cyan-400">DES</div>
+              <div className="col-span-1 text-right hidden sm:block text-rose-400 font-bold">PEN</div>
               <div className="col-span-4 sm:col-span-2 text-right font-bold text-slate-200">Total</div>
             </>
           ) : (
-            <div className="col-span-4 sm:col-span-6 text-right font-bold text-cyan-400">Design Mark (Max 25)</div>
+            <div className="col-span-4 sm:col-span-7 text-right font-bold text-cyan-400">Design Mark (Max 25)</div>
           )}
         </div>
 
@@ -141,7 +142,7 @@ export default function LeaderboardTable({ entries = [], searchQuery = '', viewM
                   </div>
 
                   {/* Team Name & Code */}
-                  <div className="col-span-6 sm:col-span-5 pr-2">
+                  <div className="col-span-6 sm:col-span-4 pr-2">
                     <div className="flex items-center gap-2">
                       <p className={`font-semibold truncate text-xs sm:text-sm ${isDQ ? 'text-red-200 line-through' : 'text-slate-100'}`}>
                         {entry.name || 'Unnamed Team'}
@@ -152,12 +153,17 @@ export default function LeaderboardTable({ entries = [], searchQuery = '', viewM
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-slate-500 font-mono truncate">{entry.code || 'N/A'}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                      <span>{entry.code || 'N/A'}</span>
+                      {entry.penalty > 0 && (
+                        <span className="text-rose-400 font-bold sm:hidden">(-{entry.penalty} pen)</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Breakdown / Scores */}
                   {isDQ ? (
-                    <div className="col-span-4 sm:col-span-6 text-right font-mono font-bold text-red-400 text-xs sm:text-sm">
+                    <div className="col-span-4 sm:col-span-7 text-right font-mono font-bold text-red-400 text-xs sm:text-sm">
                       0 pts (DQ)
                     </div>
                   ) : viewMode === 'overall' ? (
@@ -166,6 +172,9 @@ export default function LeaderboardTable({ entries = [], searchQuery = '', viewM
                       <div className="col-span-1 text-right text-slate-300 font-mono text-xs hidden sm:block">{entry.round_2 ?? 0}</div>
                       <div className="col-span-1 text-right text-slate-300 font-mono text-xs hidden sm:block">{entry.round_3 ?? 0}</div>
                       <div className="col-span-1 text-right text-cyan-400 font-mono text-xs hidden sm:block">{entry.design ?? 0}</div>
+                      <div className="col-span-1 text-right text-rose-400 font-mono text-xs hidden sm:block font-bold">
+                        {entry.penalty > 0 ? `-${entry.penalty}` : '0'}
+                      </div>
                       <div className="col-span-4 sm:col-span-2 text-right">
                         <AnimatedScore
                           value={entry.total || 0}
@@ -174,7 +183,7 @@ export default function LeaderboardTable({ entries = [], searchQuery = '', viewM
                       </div>
                     </>
                   ) : (
-                    <div className="col-span-4 sm:col-span-6 text-right font-mono">
+                    <div className="col-span-4 sm:col-span-7 text-right font-mono">
                       <AnimatedScore
                         value={entry.design || 0}
                         className="font-bold text-cyan-400 text-sm sm:text-base"

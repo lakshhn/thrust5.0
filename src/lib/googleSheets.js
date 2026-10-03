@@ -6,9 +6,7 @@
  *   - Engine A: Apps Script Web App (JSON)
  *   - Engine B: Google Sheets Public CSV Export (Instant, Reliable)
  *
- * If Engine A returns 0 teams or fails, Engine B runs automatically.
- * This guarantees the leaderboard NEVER clears up or shows empty
- * when teams exist in the Google Sheet.
+ * Scoring: Total = Round 1 + Round 2 + Round 3 + Design - Penalty.
  * ============================================================
  */
 
@@ -153,12 +151,13 @@ export async function syncAdminUpdateToGoogleSheet(action, payload) {
 function normalizeTeamFromJSON(t, idx) {
   const dqStr = (t.disqualified || "").toString().toUpperCase()
   const isDQ = dqStr === "YES" || dqStr === "TRUE" || dqStr === "DQ" || dqStr === "DISQUALIFIED" || dqStr.indexOf("YES") !== -1
-  const r1   = Number(t.round_1) || 0
-  const r2   = Number(t.round_2) || 0
-  const r3   = Number(t.round_3) || 0
-  const des  = Number(t.design)  || 0
+  const r1      = Number(t.round_1) || 0
+  const r2      = Number(t.round_2) || 0
+  const r3      = Number(t.round_3) || 0
+  const des     = Number(t.design)  || 0
+  const penalty = Number(t.penalty) || 0
 
-  const calculatedTotal = r1 + r2 + r3 + des
+  const calculatedTotal = Math.max(0, r1 + r2 + r3 + des - penalty)
   const rawTotal = Number(t.total)
   const total = isDQ ? 0 : (!isNaN(rawTotal) && rawTotal > 0 && calculatedTotal === 0 ? rawTotal : calculatedTotal)
 
@@ -173,6 +172,7 @@ function normalizeTeamFromJSON(t, idx) {
     round_2:      r2,
     round_3:      r3,
     design:       des,
+    penalty:      penalty,
     disqualified: isDQ,
     total,
     source:       "googlesheet",
@@ -223,14 +223,15 @@ function parseCSVtoTeams(csvText) {
 
   const rawHeaders = parseCSVRow(lines[0]).map(h => cleanCell(h).toLowerCase())
 
-  const colCode   = findCol(rawHeaders, ["team code", "code", "team id", "id"])
-  const colName   = findCol(rawHeaders, ["team name", "name"])
-  const colR1     = findCol(rawHeaders, ["r1", "round 1", "round1", "flight 1"])
-  const colR2     = findCol(rawHeaders, ["r2", "round 2", "round2", "flight 2"])
-  const colR3     = findCol(rawHeaders, ["r3", "round 3", "round3", "flight 3"])
-  const colDesign = findCol(rawHeaders, ["design", "design marks", "des"])
-  const colDQ     = findCol(rawHeaders, ["disqualified", "dq"])
-  const colTotal  = findCol(rawHeaders, ["total", "total marks", "total score"])
+  const colCode    = findCol(rawHeaders, ["team code", "code", "team id", "id"])
+  const colName    = findCol(rawHeaders, ["team name", "name"])
+  const colR1      = findCol(rawHeaders, ["r1", "round 1", "round1", "flight 1"])
+  const colR2      = findCol(rawHeaders, ["r2", "round 2", "round2", "flight 2"])
+  const colR3      = findCol(rawHeaders, ["r3", "round 3", "round3", "flight 3"])
+  const colDesign  = findCol(rawHeaders, ["design", "design marks", "des"])
+  const colPenalty = findCol(rawHeaders, ["penalty", "pen", "deduction", "deductions"])
+  const colDQ      = findCol(rawHeaders, ["disqualified", "dq"])
+  const colTotal   = findCol(rawHeaders, ["total", "total marks", "total score"])
 
   const nameIdx = colName ?? 1
 
@@ -240,15 +241,16 @@ function parseCSVtoTeams(csvText) {
     const name = cleanCell(row[nameIdx])
     if (!name || name.toLowerCase() === "team name") continue
 
-    const r1  = colR1     !== null ? (parseFloat(cleanCell(row[colR1]))     || 0) : 0
-    const r2  = colR2     !== null ? (parseFloat(cleanCell(row[colR2]))     || 0) : 0
-    const r3  = colR3     !== null ? (parseFloat(cleanCell(row[colR3]))     || 0) : 0
-    const des = colDesign !== null ? (parseFloat(cleanCell(row[colDesign])) || 0) : 0
+    const r1      = colR1      !== null ? (parseFloat(cleanCell(row[colR1]))      || 0) : 0
+    const r2      = colR2      !== null ? (parseFloat(cleanCell(row[colR2]))      || 0) : 0
+    const r3      = colR3      !== null ? (parseFloat(cleanCell(row[colR3]))      || 0) : 0
+    const des     = colDesign  !== null ? (parseFloat(cleanCell(row[colDesign]))  || 0) : 0
+    const penalty = colPenalty !== null ? (parseFloat(cleanCell(row[colPenalty])) || 0) : 0
 
     const dqRaw = colDQ !== null ? cleanCell(row[colDQ]).toUpperCase() : ""
     const isDQ  = dqRaw === "YES" || dqRaw === "TRUE" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1
 
-    const calculatedTotal = r1 + r2 + r3 + des
+    const calculatedTotal = Math.max(0, r1 + r2 + r3 + des - penalty)
     const rawTotal = colTotal !== null ? parseFloat(cleanCell(row[colTotal])) : NaN
     const total = isDQ ? 0 : (!isNaN(rawTotal) && rawTotal > 0 && calculatedTotal === 0 ? rawTotal : calculatedTotal)
 
@@ -263,6 +265,7 @@ function parseCSVtoTeams(csvText) {
       round_2:      r2,
       round_3:      r3,
       design:       des,
+      penalty:      penalty,
       disqualified: isDQ,
       total,
       source:       "googlesheet",

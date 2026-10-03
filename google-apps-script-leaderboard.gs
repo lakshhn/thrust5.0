@@ -4,29 +4,26 @@
  * ============================================================
  * Spreadsheet ID: 1aLanZdwVvRVqP66ZTafFPQoCXhYyFofaNT_iReVqXaw
  *
- * HOW IT WORKS:
- *   - Automatically detects whichever sheet tab contains your teams
- *     (e.g., "Sheet1", "Leaderboard", etc.)
- *   - doGet() handles both reads (?action=GET) and writes (?action=UPDATE_SCORE, etc.)
- *     without any CORS preflight issues.
- *   - onEdit() automatically updates the Total column whenever any score or DQ
- *     cell is changed in the spreadsheet directly.
+ * Scoring Formula:
+ *   Total = Math.max(0, Round 1 + Round 2 + Round 3 + Design - Penalty)
+ *   If Disqualified = "Yes" -> Total = 0
+ *
+ * Column Layout (dynamic, any order supported):
+ *   Team Code | Team Name | R1 | R2 | R3 | Design | Penalty | Disqualified | Total
  * ============================================================
  */
 
 var SPREADSHEET_ID = "1aLanZdwVvRVqP66ZTafFPQoCXhYyFofaNT_iReVqXaw";
 
-// Standard headers
-var STANDARD_HEADERS = ["Team Code", "Team Name", "R1", "R2", "R3", "Design", "Disqualified", "Total"];
+var STANDARD_HEADERS = ["Team Code", "Team Name", "R1", "R2", "R3", "Design", "Penalty", "Disqualified", "Total"];
 
 // ─────────────────────────────────────────────────────────────
-// Dynamic Sheet Finder — ALWAYS finds the tab with actual teams
+// Dynamic Sheet Finder — finds the tab with your team data
 // ─────────────────────────────────────────────────────────────
 function getSheet() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheets = ss.getSheets();
 
-  // 1. Look for sheet with data and "team" in the header
   for (var i = 0; i < sheets.length; i++) {
     var s = sheets[i];
     if (s.getLastRow() > 1 && s.getLastColumn() >= 2) {
@@ -38,12 +35,11 @@ function getSheet() {
     }
   }
 
-  // 2. Fallbacks
   return ss.getSheetByName("Sheet1") || ss.getSheetByName("Leaderboard") || sheets[0];
 }
 
 // ─────────────────────────────────────────────────────────────
-// Dynamic Column Detection — matches any header names / ordering
+// Dynamic Column Detection
 // ─────────────────────────────────────────────────────────────
 function detectColumns(sheet) {
   var lastCol = sheet.getLastColumn();
@@ -52,14 +48,12 @@ function detectColumns(sheet) {
   var headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 
   function findIdx(candidates) {
-    // Pass 1: exact match
     for (var i = 0; i < headerRow.length; i++) {
       var h = (headerRow[i] || "").toString().toLowerCase().trim();
       for (var j = 0; j < candidates.length; j++) {
         if (h === candidates[j].toLowerCase()) return i;
       }
     }
-    // Pass 2: substring match
     for (var i = 0; i < headerRow.length; i++) {
       var h = (headerRow[i] || "").toString().toLowerCase().trim();
       for (var j = 0; j < candidates.length; j++) {
@@ -70,23 +64,26 @@ function detectColumns(sheet) {
   }
 
   return {
-    code:   findIdx(["team code", "code", "team id", "id"]),
-    name:   findIdx(["team name", "name"]),
-    r1:     findIdx(["r1", "round 1", "round1", "flight 1"]),
-    r2:     findIdx(["r2", "round 2", "round2", "flight 2"]),
-    r3:     findIdx(["r3", "round 3", "round3", "flight 3"]),
-    design: findIdx(["design", "design marks", "des"]),
-    dq:     findIdx(["disqualified", "dq"]),
-    total:  findIdx(["total", "total marks", "total score"])
+    code:    findIdx(["team code", "code", "team id", "id"]),
+    name:    findIdx(["team name", "name"]),
+    r1:      findIdx(["r1", "round 1", "round1", "flight 1"]),
+    r2:      findIdx(["r2", "round 2", "round2", "flight 2"]),
+    r3:      findIdx(["r3", "round 3", "round3", "flight 3"]),
+    design:  findIdx(["design", "design marks", "des"]),
+    penalty: findIdx(["penalty", "pen", "deduction", "deductions"]),
+    dq:      findIdx(["disqualified", "dq"]),
+    total:   findIdx(["total", "total marks", "total score"])
   };
 }
 
 // ─────────────────────────────────────────────────────────────
-// Calculation helper
+// Calculation: Total = R1 + R2 + R3 + Design - Penalty
 // ─────────────────────────────────────────────────────────────
-function calcTotal(r1, r2, r3, design, isDQ) {
+function calcTotal(r1, r2, r3, design, penalty, isDQ) {
   if (isDQ) return 0;
-  return (Number(r1) || 0) + (Number(r2) || 0) + (Number(r3) || 0) + (Number(design) || 0);
+  var sum = (Number(r1) || 0) + (Number(r2) || 0) + (Number(r3) || 0) + (Number(design) || 0);
+  var pen = Number(penalty) || 0;
+  return Math.max(0, sum - pen);
 }
 
 function normName(name) {
@@ -105,7 +102,7 @@ function findTeamRow(sheet, cols, teamName) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// setupSheet — ensures headers and Total column exist
+// setupSheet — ensures Penalty and Total columns exist in sheet
 // ─────────────────────────────────────────────────────────────
 function setupSheet() {
   var sheet = getSheet();
@@ -113,6 +110,15 @@ function setupSheet() {
     sheet.appendRow(STANDARD_HEADERS);
   } else {
     var cols = detectColumns(sheet);
+    // If Penalty column is missing, add it before Disqualified or Total
+    if (cols && cols.penalty === -1) {
+      var insertAt = (cols.dq !== -1) ? cols.dq + 1 : sheet.getLastColumn() + 1;
+      sheet.insertColumnBefore(insertAt);
+      sheet.getRange(1, insertAt).setValue("Penalty");
+      sheet.getRange(1, insertAt).setBackground("#0D1117").setFontColor("#FF4D4D").setFontWeight("bold");
+    }
+
+    cols = detectColumns(sheet);
     // If Total column is missing, append it
     if (cols && cols.total === -1) {
       var nextCol = sheet.getLastColumn() + 1;
@@ -120,12 +126,12 @@ function setupSheet() {
       sheet.getRange(1, nextCol).setBackground("#0D1117").setFontColor("#29ABE2").setFontWeight("bold");
     }
   }
-  Logger.log("Configured sheet: " + sheet.getName() + " with " + sheet.getLastRow() + " rows");
+  Logger.log("Configured sheet: " + sheet.getName());
 }
 
 // ─────────────────────────────────────────────────────────────
 // onEdit Trigger — auto-calculates Total column whenever
-// scores or DQ status are edited directly in the sheet
+// scores, penalties, or DQ are edited directly in the sheet
 // ─────────────────────────────────────────────────────────────
 function onEdit(e) {
   try {
@@ -134,33 +140,34 @@ function onEdit(e) {
     if (sheet.getName() !== targetSheet.getName()) return;
 
     var row = e.range.getRow();
-    if (row < 2) return; // skip header
+    if (row < 2) return;
 
     var cols = detectColumns(sheet);
     if (!cols) return;
 
     var editedCol = e.range.getColumn() - 1;
-    var scoreCols = [cols.r1, cols.r2, cols.r3, cols.design, cols.dq];
-    var isScoreEdit = false;
+    var scoreCols = [cols.r1, cols.r2, cols.r3, cols.design, cols.penalty, cols.dq];
+    var isRelevant = false;
     for (var i = 0; i < scoreCols.length; i++) {
       if (scoreCols[i] !== -1 && editedCol === scoreCols[i]) {
-        isScoreEdit = true;
+        isRelevant = true;
         break;
       }
     }
-    if (!isScoreEdit) return;
+    if (!isRelevant) return;
 
     var lastCol = sheet.getLastColumn();
     var rowVals = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
-    var r1     = cols.r1     !== -1 ? (Number(rowVals[cols.r1])     || 0) : 0;
-    var r2     = cols.r2     !== -1 ? (Number(rowVals[cols.r2])     || 0) : 0;
-    var r3     = cols.r3     !== -1 ? (Number(rowVals[cols.r3])     || 0) : 0;
-    var design = cols.design !== -1 ? (Number(rowVals[cols.design]) || 0) : 0;
-    var dqRaw  = cols.dq    !== -1 ? (rowVals[cols.dq] || "").toString().toUpperCase() : "NO";
-    var isDQ   = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
+    var r1      = cols.r1      !== -1 ? (Number(rowVals[cols.r1])      || 0) : 0;
+    var r2      = cols.r2      !== -1 ? (Number(rowVals[cols.r2])      || 0) : 0;
+    var r3      = cols.r3      !== -1 ? (Number(rowVals[cols.r3])      || 0) : 0;
+    var design  = cols.design  !== -1 ? (Number(rowVals[cols.design])  || 0) : 0;
+    var penalty = cols.penalty !== -1 ? (Number(rowVals[cols.penalty]) || 0) : 0;
+    var dqRaw   = cols.dq      !== -1 ? (rowVals[cols.dq] || "").toString().toUpperCase() : "NO";
+    var isDQ    = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
 
-    var total  = calcTotal(r1, r2, r3, design, isDQ);
+    var total   = calcTotal(r1, r2, r3, design, penalty, isDQ);
 
     if (cols.total !== -1) {
       sheet.getRange(row, cols.total + 1).setValue(total);
@@ -225,23 +232,23 @@ function handleGet(sheet, e) {
       var name = (row[nameCol] || "").toString().trim();
       if (!name || name.toLowerCase() === "team name") continue;
 
-      var r1     = (cols && cols.r1     !== -1) ? (Number(row[cols.r1])     || 0) : 0;
-      var r2     = (cols && cols.r2     !== -1) ? (Number(row[cols.r2])     || 0) : 0;
-      var r3     = (cols && cols.r3     !== -1) ? (Number(row[cols.r3])     || 0) : 0;
-      var design = (cols && cols.design !== -1) ? (Number(row[cols.design]) || 0) : 0;
-      var dqRaw  = (cols && cols.dq    !== -1) ? (row[cols.dq] || "").toString().toUpperCase() : "NO";
-      var isDQ   = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
-      var code   = (cols && cols.code  !== -1 && row[cols.code])
-                     ? row[cols.code].toString().trim().toUpperCase()
-                     : ("T-" + String(i + 1).padStart(2, "0"));
+      var r1      = (cols && cols.r1      !== -1) ? (Number(row[cols.r1])      || 0) : 0;
+      var r2      = (cols && cols.r2      !== -1) ? (Number(row[cols.r2])      || 0) : 0;
+      var r3      = (cols && cols.r3      !== -1) ? (Number(row[cols.r3])      || 0) : 0;
+      var design  = (cols && cols.design  !== -1) ? (Number(row[cols.design])  || 0) : 0;
+      var penalty = (cols && cols.penalty !== -1) ? (Number(row[cols.penalty]) || 0) : 0;
+      var dqRaw   = (cols && cols.dq      !== -1) ? (row[cols.dq] || "").toString().toUpperCase() : "NO";
+      var isDQ    = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
+      var code    = (cols && cols.code    !== -1 && row[cols.code])
+                      ? row[cols.code].toString().trim().toUpperCase()
+                      : ("T-" + String(i + 1).padStart(2, "0"));
 
-      // Read total from sheet or calculate
-      var total = calcTotal(r1, r2, r3, design, isDQ);
+      var total = calcTotal(r1, r2, r3, design, penalty, isDQ);
+
+      // Keep Total column synced in sheet
       if (cols && cols.total !== -1) {
         var sheetTotal = Number(row[cols.total]);
-        if (!isNaN(sheetTotal) && sheetTotal > 0 && total === 0) {
-          total = sheetTotal;
-        } else if (sheetTotal !== total && !isDQ && (r1 > 0 || r2 > 0 || r3 > 0 || design > 0)) {
+        if (isNaN(sheetTotal) || sheetTotal !== total) {
           sheet.getRange(i + 2, cols.total + 1).setValue(total);
         }
       }
@@ -253,6 +260,7 @@ function handleGet(sheet, e) {
         round_2:      r2,
         round_3:      r3,
         design:       design,
+        penalty:      penalty,
         disqualified: isDQ,
         total:        total
       });
@@ -289,14 +297,15 @@ function handleAddTeam(sheet, params) {
     var lastCol  = Math.max(sheet.getLastColumn(), STANDARD_HEADERS.length);
     var newRow   = new Array(lastCol).fill("");
 
-    if (cols.code   !== -1) newRow[cols.code]   = autoCode;
-    if (cols.name   !== -1) newRow[cols.name]   = name;
-    if (cols.r1     !== -1) newRow[cols.r1]     = 0;
-    if (cols.r2     !== -1) newRow[cols.r2]     = 0;
-    if (cols.r3     !== -1) newRow[cols.r3]     = 0;
-    if (cols.design !== -1) newRow[cols.design] = 0;
-    if (cols.dq     !== -1) newRow[cols.dq]     = "No";
-    if (cols.total  !== -1) newRow[cols.total]  = 0;
+    if (cols.code    !== -1) newRow[cols.code]    = autoCode;
+    if (cols.name    !== -1) newRow[cols.name]    = name;
+    if (cols.r1      !== -1) newRow[cols.r1]      = 0;
+    if (cols.r2      !== -1) newRow[cols.r2]      = 0;
+    if (cols.r3      !== -1) newRow[cols.r3]      = 0;
+    if (cols.design  !== -1) newRow[cols.design]  = 0;
+    if (cols.penalty !== -1) newRow[cols.penalty] = 0;
+    if (cols.dq      !== -1) newRow[cols.dq]      = "No";
+    if (cols.total   !== -1) newRow[cols.total]   = 0;
 
     sheet.appendRow(newRow);
     return jsonOut({ status: "ok", action: "ADD_TEAM", name: name, code: autoCode });
@@ -324,19 +333,21 @@ function handleUpdateScore(sheet, params) {
     var lastCol = sheet.getLastColumn();
     var rowVals = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 
-    var r1     = cols.r1     !== -1 ? (Number(rowVals[cols.r1])     || 0) : 0;
-    var r2     = cols.r2     !== -1 ? (Number(rowVals[cols.r2])     || 0) : 0;
-    var r3     = cols.r3     !== -1 ? (Number(rowVals[cols.r3])     || 0) : 0;
-    var design = cols.design !== -1 ? (Number(rowVals[cols.design]) || 0) : 0;
-    var dqRaw  = cols.dq    !== -1 ? (rowVals[cols.dq] || "No").toString().toUpperCase() : "NO";
-    var isDQ   = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
+    var r1      = cols.r1      !== -1 ? (Number(rowVals[cols.r1])      || 0) : 0;
+    var r2      = cols.r2      !== -1 ? (Number(rowVals[cols.r2])      || 0) : 0;
+    var r3      = cols.r3      !== -1 ? (Number(rowVals[cols.r3])      || 0) : 0;
+    var design  = cols.design  !== -1 ? (Number(rowVals[cols.design])  || 0) : 0;
+    var penalty = cols.penalty !== -1 ? (Number(rowVals[cols.penalty]) || 0) : 0;
+    var dqRaw   = cols.dq      !== -1 ? (rowVals[cols.dq] || "No").toString().toUpperCase() : "NO";
+    var isDQ    = (dqRaw === "YES" || dqRaw === "DQ" || dqRaw === "DISQUALIFIED" || dqRaw.indexOf("YES") !== -1);
 
     var cat = (params.category || "").toString().toLowerCase();
     var val = Number(params.value) || 0;
-    if (cat === "round_1" && cols.r1     !== -1) { r1     = val; sheet.getRange(row, cols.r1     + 1).setValue(val); }
-    if (cat === "round_2" && cols.r2     !== -1) { r2     = val; sheet.getRange(row, cols.r2     + 1).setValue(val); }
-    if (cat === "round_3" && cols.r3     !== -1) { r3     = val; sheet.getRange(row, cols.r3     + 1).setValue(val); }
-    if (cat === "design"  && cols.design !== -1) { design = val; sheet.getRange(row, cols.design + 1).setValue(val); }
+    if (cat === "round_1" && cols.r1      !== -1) { r1      = val; sheet.getRange(row, cols.r1      + 1).setValue(val); }
+    if (cat === "round_2" && cols.r2      !== -1) { r2      = val; sheet.getRange(row, cols.r2      + 1).setValue(val); }
+    if (cat === "round_3" && cols.r3      !== -1) { r3      = val; sheet.getRange(row, cols.r3      + 1).setValue(val); }
+    if (cat === "design"  && cols.design  !== -1) { design  = val; sheet.getRange(row, cols.design  + 1).setValue(val); }
+    if (cat === "penalty" && cols.penalty !== -1) { penalty = val; sheet.getRange(row, cols.penalty + 1).setValue(val); }
 
     if (params.disqualified !== undefined && cols.dq !== -1) {
       var dqStr = params.disqualified.toString().toUpperCase();
@@ -344,7 +355,7 @@ function handleUpdateScore(sheet, params) {
       sheet.getRange(row, cols.dq + 1).setValue(isDQ ? "Yes" : "No");
     }
 
-    var total = calcTotal(r1, r2, r3, design, isDQ);
+    var total = calcTotal(r1, r2, r3, design, penalty, isDQ);
     if (cols.total !== -1) sheet.getRange(row, cols.total + 1).setValue(total);
 
     return jsonOut({ status: "ok", action: "UPDATE_SCORE", name: name, total: total });

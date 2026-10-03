@@ -196,7 +196,9 @@ export default function AdminPanel() {
       if (t.id !== teamId) return t
       const updated = { ...t, [category]: val }
       if (!updated.disqualified) {
-        updated.total = (updated.round_1 || 0) + (updated.round_2 || 0) + (updated.round_3 || 0) + (updated.design || 0)
+        const p = category === 'penalty' ? val : (updated.penalty || 0)
+        const rawT = (updated.round_1 || 0) + (updated.round_2 || 0) + (updated.round_3 || 0) + (updated.design || 0) - p
+        updated.total = Math.max(0, rawT)
       }
       return updated
     }))
@@ -404,17 +406,19 @@ export default function AdminPanel() {
                   <th className="px-3 py-3 text-center">Round 2</th>
                   <th className="px-3 py-3 text-center">Round 3</th>
                   <th className="px-3 py-3 text-center text-cyan-400">Design (Max 25)</th>
+                  <th className="px-3 py-3 text-center text-rose-400">Penalty</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-center min-w-[160px]">Status / Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {filteredTeams.map(team => {
-                  const r1     = team.round_1 || 0
-                  const r2     = team.round_2 || 0
-                  const r3     = team.round_3 || 0
-                  const design = team.design  || 0
-                  const total  = team.disqualified ? 0 : r1 + r2 + r3 + design
+                  const r1      = team.round_1 || 0
+                  const r2      = team.round_2 || 0
+                  const r3      = team.round_3 || 0
+                  const design  = team.design  || 0
+                  const penalty = team.penalty || 0
+                  const total   = team.disqualified ? 0 : Math.max(0, r1 + r2 + r3 + design - penalty)
                   const isEditingName = editingTeamId === team.id
 
                   return (
@@ -518,6 +522,18 @@ export default function AdminPanel() {
                           className="w-16 text-center py-1 bg-[#06090F] border border-cyan-500/50 rounded text-xs font-mono font-semibold text-cyan-400 focus:outline-none focus:border-cyan-400 disabled:opacity-30"
                           min={0}
                           max={25}
+                        />
+                      </td>
+
+                      {/* Penalty */}
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="number"
+                          disabled={team.disqualified}
+                          value={penalty}
+                          onChange={e => handleScoreChange(team.id, 'penalty', e.target.value)}
+                          className="w-16 text-center py-1 bg-[#06090F] border border-rose-500/50 rounded text-xs font-mono font-semibold text-rose-400 focus:outline-none focus:border-rose-400 disabled:opacity-30"
+                          min={0}
                         />
                       </td>
 
