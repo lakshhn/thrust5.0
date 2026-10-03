@@ -1,13 +1,20 @@
-import { Wifi, WifiOff, Clock } from 'lucide-react'
+import { Wifi, WifiOff, Clock, Loader2 } from 'lucide-react'
 
 /**
  * LiveStatusPill — connection state indicator
- * Operational signal, must be noticeable from a distance (Design Doc §5.4)
- * Three states: connected, reconnecting, stale
- * Uses both color AND icon (colorblind-safe, Design Doc §7)
+ * Four states: connecting, connected, reconnecting, stale
+ * Uses both color AND icon (colorblind-safe)
  */
 export default function LiveStatusPill({ status = 'connected', lastUpdated }) {
   const config = {
+    connecting: {
+      pillClass: 'live-pill-reconnecting',
+      dotClass: 'live-dot live-dot-reconnect',
+      Icon: Loader2,
+      label: 'LOADING',
+      ariaLabel: 'Connecting — fetching live data',
+      spin: true,
+    },
     connected: {
       pillClass: 'live-pill-connected',
       dotClass: 'live-dot live-dot-pulse',
@@ -31,7 +38,7 @@ export default function LiveStatusPill({ status = 'connected', lastUpdated }) {
     },
   }
 
-  const { pillClass, dotClass, Icon, label, ariaLabel } = config[status] || config.connected
+  const { pillClass, dotClass, Icon, label, ariaLabel, spin } = config[status] || config.connected
 
   const formattedTime = lastUpdated
     ? new Intl.DateTimeFormat('en-IN', {
@@ -47,7 +54,7 @@ export default function LiveStatusPill({ status = 'connected', lastUpdated }) {
       {/* Status pill */}
       <div className={`live-pill ${pillClass}`}>
         <span className={dotClass} aria-hidden="true" />
-        <Icon size={11} strokeWidth={2.5} aria-hidden="true" />
+        <Icon size={11} strokeWidth={2.5} aria-hidden="true" className={spin ? 'animate-spin' : ''} />
         <span>{label}</span>
       </div>
 
