@@ -10,8 +10,8 @@ import AFCLogo from '../components/ui/AFCLogo.jsx'
 import { computeLeaderboard } from '../data/mockData.js'
 import { fetchGoogleSheetData } from '../lib/googleSheets.js'
 
-// Poll interval — 15s is plenty for a live event without hammering Google
-const POLL_INTERVAL_MS = 15_000
+// Poll interval — 8s ensures rapid real-time updates as judges score in the sheet
+const POLL_INTERVAL_MS = 8_000
 
 export default function Leaderboard() {
   const [entries, setEntries] = useState([])
