@@ -1,9 +1,17 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
-import Leaderboard from './pages/Leaderboard.jsx'
+import OfflineStandby from './pages/OfflineStandby.jsx'
 import LoadingScreen from './components/ui/LoadingScreen.jsx'
 
-// Code-split admin bundle — never loads on public route
+/**
+ * Site status control:
+ * Set IS_OFFLINE = true to temporarily shut down the public leaderboard.
+ * Set IS_OFFLINE = false to restore live leaderboard.
+ */
+export const IS_OFFLINE = true
+
+// Code-split routes
+const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'))
 const AdminLogin = lazy(() => import('./pages/AdminLogin.jsx'))
 const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'))
 
@@ -11,10 +19,10 @@ export default function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        {/* Public route — read-only, no admin bundle loaded */}
-        <Route path="/" element={<Leaderboard />} />
+        {/* Public route — displays offline maintenance page during temporary shutdown */}
+        <Route path="/" element={IS_OFFLINE ? <OfflineStandby /> : <Leaderboard />} />
 
-        {/* Admin routes — lazy loaded, completely separate bundle */}
+        {/* Admin routes — protected behind authentication */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminPanel />} />
 
